@@ -6,6 +6,11 @@ on:
     branches-ignore:
       - 'robot-docs'
 
+# Write on contents, asked for here rather than taken from the organization's default token permissions: the README
+# update pushes a branch with the workflow's own token, and an organization can default that token to read-only.
+permissions:
+  contents: write
+
 jobs:
   call-update-readme:
     uses: PepperDash/workflow-templates/.github/workflows/update-readme.yml@main
