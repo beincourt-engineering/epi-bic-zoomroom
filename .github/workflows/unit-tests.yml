@@ -32,7 +32,7 @@ jobs:
           FALLBACK_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           $token = if ($env:PACKAGES_PAT) { $env:PACKAGES_PAT } else { $env:FALLBACK_TOKEN }
-          dotnet nuget update source github-pepperdash-beincourt --username "${{ github.actor }}" --password $token --store-password-in-clear-text --configfile nuget.config
+          dotnet nuget update source github-packages --username "${{ github.actor }}" --password $token --store-password-in-clear-text --configfile nuget.config
 
       # The test project builds the plugin first (ProjectReference) and loads the built DLL by name.
       - name: Run tests

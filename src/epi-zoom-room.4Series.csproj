@@ -22,7 +22,7 @@
   <ItemGroup>
     <PackageReference Include="Crestron.SimplSharp.SDK.ProgramLibrary" Version="2.21.274" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
-    <PackageReference Include="PepperDash.ZoomRoom.Sdk" Version="2.0.0-csv-zrc-sandbox.10" GeneratePathProperty="true" />
+    <PackageReference Include="PepperDash.ZoomRoom.Sdk" Version="2.0.0-csv-zrc-sandbox.11" GeneratePathProperty="true" />
   </ItemGroup>
 
   <ItemGroup>
