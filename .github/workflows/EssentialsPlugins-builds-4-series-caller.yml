@@ -18,10 +18,7 @@ jobs:
     uses: PepperDash/workflow-templates/.github/workflows/essentialsplugins-getversion.yml@main
     secrets: inherit
   build-4Series:
-    # Temporarily pinned to the branch that authenticates the org GitHub Packages feed so this
-    # plugin's INTERNAL dependency (PepperDash.ZoomRoom.Sdk) restores in CI. Revert to @main once
-    # PepperDash/workflow-templates#<pr> merges.
-    uses: PepperDash/workflow-templates/.github/workflows/essentialsplugins-4Series-builds.yml@feature/authenticate-github-packages-feed
+    uses: PepperDash/workflow-templates/.github/workflows/essentialsplugins-4Series-builds.yml@main
     secrets: inherit
     needs: getVersion
     if: needs.getVersion.outputs.newVersion == 'true'
