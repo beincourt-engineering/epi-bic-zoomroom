@@ -87,7 +87,7 @@ if the connection flag is stale.
 
 **Repair policy — never give up:** self-perpetuating reconnect with escalating backoff
 `5 → 10 → 20 → 30 → 60 s`, then holds at **60 s forever** until a real `Connected` event returns. The
-old 10-attempt cap was removed so an unattended courtroom self-heals whenever the room is reachable
+old 10-attempt cap was removed so an unattended room self-heals whenever the room is reachable
 again.
 
 **devcomm truth:** online/offline is now driven by *actual* probe/command results, not just SDK
