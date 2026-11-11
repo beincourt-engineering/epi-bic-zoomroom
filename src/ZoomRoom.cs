@@ -23,6 +23,8 @@ using PepperDash.Essentials.Devices.Common.VideoCodec;
 using PepperDash.Essentials.Devices.Common.VideoCodec.Interfaces;
 using PepperDash.ZoomRoom.Sdk;
 using PepperDash.ZoomRoom.Sdk.EventArgs;
+// Crestron.SimplSharpPro.DeviceSupport has a Feedback type too.
+using Feedback = PepperDash.Essentials.Core.Feedback;
 
 namespace PepperDash.Essentials.Plugins
 {
@@ -30,7 +32,8 @@ namespace PepperDash.Essentials.Plugins
 		IHasScheduleAwareness, IHasCodecCameras, IHasParticipants, IHasCameraOff, IHasCameraMuteWithUnmuteReqeust, IHasCameraAutoMode,
 		IHasFarEndContentStatus, IHasSelfviewPosition, IHasPhoneDialing, IHasZoomRoomLayouts, IHasParticipantPinUnpin,
 		IHasParticipantAudioMute, IHasSelfviewSize, IPasswordPrompt, IHasStartMeeting, IHasMeetingInfo, IHasPresentationOnlyMeeting,
-		IHasMeetingLock, IHasMeetingRecordingWithPrompt, IZoomWirelessShareInstructions, IHasCodecRoomPresets, IRoutingSinkWithFeedback
+		IHasMeetingLock, IHasMeetingRecordingWithPrompt, IZoomWirelessShareInstructions, IHasCodecRoomPresets, IRoutingSinkWithFeedback,
+		IHasFeedback
 	{
 #pragma warning disable CS0067 // Required by IHasCameraMuteWithUnmuteReqeust; never raised because Zoom Room SDK handles video state directly
 		public event EventHandler VideoUnmuteRequested;
@@ -242,7 +245,7 @@ namespace PepperDash.Essentials.Plugins
 			SupportsCameraOff = true; // Always allow turning off the camera for zoom calls?
 			SupportsCameraAutoMode = _props.SupportsCameraAutoMode;
 
-			PhoneOffHookFeedback = new BoolFeedback(PhoneOffHookFeedbackFunc);
+			PhoneOffHookFeedback = new BoolFeedback("phoneOffHook", PhoneOffHookFeedbackFunc);
 			CallerIdNameFeedback = new StringFeedback(CallerIdNameFeedbackFunc);
 			CallerIdNumberFeedback = new StringFeedback(CallerIdNumberFeedbackFunc);
 
@@ -255,13 +258,33 @@ namespace PepperDash.Essentials.Plugins
 
 			NumberOfScreensFeedback = new IntFeedback(NumberOfScreensFeedbackFunc);
 
-			MeetingIsLockedFeedback = new BoolFeedback(() => _sdkMeetingLocked);
+			MeetingIsLockedFeedback = new BoolFeedback("meetingIsLocked", () => _sdkMeetingLocked);
 
-			MeetingIsRecordingFeedback = new BoolFeedback(() => _sdkIsRecording);
+			MeetingIsRecordingFeedback = new BoolFeedback("meetingIsRecording", () => _sdkIsRecording);
 
 			RecordConsentPromptIsVisible = new BoolFeedback(() => _recordConsentPromptIsVisible);
 
+			InCallFeedback = new BoolFeedback("inCall", () => IsInCall);
+
+			ParticipantCountFeedback = new IntFeedback("participantCount", () =>
+			{
+				lock (_participantLock)
+					return Participants.CurrentParticipants?.Count ?? 0;
+			});
+
 			SetUpRouting();
+
+			// Built last, once every feedback it lists exists. See IHasFeedback.Feedbacks.
+			_monitoredFeedbacks = new FeedbackCollection<Feedback>
+			{
+				InCallFeedback,
+				ParticipantCountFeedback,
+				PrivacyModeIsOnFeedback,
+				SharingContentIsOnFeedback,
+				MeetingIsRecordingFeedback,
+				MeetingIsLockedFeedback,
+				PhoneOffHookFeedback,
+			};
 		}
 
 		public ZoomRoomStatus Status { get; private set; }
@@ -383,6 +406,29 @@ namespace PepperDash.Essentials.Plugins
 		#region ICommunicationMonitor Members
 
 		public StatusMonitorBase CommunicationMonitor { get; private set; }
+
+		#endregion
+
+		#region IHasFeedback Members
+
+		/// <summary>
+		/// True while a meeting is connecting or connected. A ringing invite doesn't count (see IsInCall).
+		/// </summary>
+		public BoolFeedback InCallFeedback { get; private set; }
+
+		/// <summary>
+		/// Number of people on the meeting roster, this room included. 0 outside a meeting.
+		/// </summary>
+		public IntFeedback ParticipantCountFeedback { get; private set; }
+
+		private readonly FeedbackCollection<Feedback> _monitoredFeedbacks;
+
+		// Implemented explicitly so VideoCodecBase's own public Feedbacks list, a separate member that
+		// isn't part of any interface, is left as it is. Monitoring consumers read IHasFeedback: they
+		// subscribe to each listed feedback once, after activation, and re-send the device's state on any
+		// change. So the list is built once, in the constructor, and holds only keyed values that change
+		// a few times per meeting at most.
+		FeedbackCollection<Feedback> IHasFeedback.Feedbacks => _monitoredFeedbacks;
 
 		#endregion
 
@@ -853,6 +899,9 @@ namespace PepperDash.Essentials.Plugins
 				// instead of silently proceeding as if the SDK were ready. _isConnected stays false,
 				// so command methods are gated off (ZrcSdkController.Guard) and the comms monitor stays offline.
 				this.LogError("ZRC SDK controller failed to initialize (sdkConfigPath=\"{Path}\"). Device will not be functional.", _props.SdkConfigPath);
+				// No connection event will ever come, so without this the monitor stays Unknown for the
+				// whole run and monitoring can't tell a failed start from one still in progress.
+				_sdkMonitor.SetOnline(false);
 			}
 		}
 
@@ -1310,6 +1359,14 @@ namespace PepperDash.Essentials.Plugins
 			_recordingRequestSenderName = string.Empty;
 			_recordingRequestType = "unknown";
 			RecordConsentPromptIsVisible.FireUpdate();
+			// The fields above were cleared without the SDK notifications that normally fire these.
+			MeetingIsLockedFeedback.FireUpdate();
+			MeetingIsRecordingFeedback.FireUpdate();
+			SharingContentIsOnFeedback.FireUpdate();
+			SharingSourceFeedback.FireUpdate();
+			PhoneOffHookFeedback.FireUpdate();
+			CallerIdNameFeedback.FireUpdate();
+			CallerIdNumberFeedback.FireUpdate();
 			ClearPrompts("meeting reset");
 			ResetHostControls();
 			ResetBreakout();
@@ -1327,6 +1384,7 @@ namespace PepperDash.Essentials.Plugins
 				_expectedCameraTileInputs.Clear();
 				Participants.CurrentParticipants = new System.Collections.Generic.List<Participant>();
 			}
+			ParticipantCountFeedback.FireUpdate();
 			RaisePinSpotlightChanged();
 			_pendingInviteCall = null;
 			ActiveCalls.Clear();
@@ -1535,6 +1593,7 @@ namespace PepperDash.Essentials.Plugins
 			}
 
 			Participants.OnParticipantsChanged();
+			ParticipantCountFeedback.FireUpdate();
 			RefreshHostFromParticipants();
 			RefreshCoHostFromParticipants();
 			RefreshRosterAdmissionFromParticipants();
@@ -1617,6 +1676,7 @@ namespace PepperDash.Essentials.Plugins
 			_sdkSharingState = e.SharingState;
 			UpdateMeetingInfo();
 			SharingContentIsOnFeedback.FireUpdate();
+			SharingSourceFeedback.FireUpdate();
 			ReceivingContent.FireUpdate();
 			CanSwapContentWithThumbnailFeedback.FireUpdate();
 			OnShareStateForShareLayout();
@@ -1839,6 +1899,7 @@ namespace PepperDash.Essentials.Plugins
 		protected override void OnCallStatusChange(CodecActiveCallItem item)
 		{
 			base.OnCallStatusChange(item);
+			InCallFeedback.FireUpdate();
 		}
 
 		/// <summary>
