@@ -21,6 +21,13 @@ namespace PepperDash.Essentials.Plugins
 		private int? _pcCpuPercent;
 		private int? _pcMemoryPercent;
 
+		// In a call the Room PC's CPU moves with every statistics message (22-66% on JSC), and each change
+		// re-sends the whole room record. Hold each figure until it moves by a real step.
+		private const int PcCpuStep = 10;
+		private const int PcMemoryStep = 5;
+		private readonly SteadyReading _steadyPcCpu = new SteadyReading(PcCpuStep);
+		private readonly SteadyReading _steadyPcMemory = new SteadyReading(PcMemoryStep);
+
 		/// <summary>The Room PC's CPU use, percent. 0 until the room reports it.</summary>
 		public IntFeedback CpuUsagePercentFeedback { get; private set; }
 
@@ -67,8 +74,8 @@ namespace PepperDash.Essentials.Plugins
 					e.CpuOverallUsage, e.CpuZoomRoomsUsage, e.MemoryOverallUsage, e.MemoryZoomRoomsUsage, e.MemorySize, e.CpuCoreCount);
 			}
 
-			_pcCpuPercent = ZoomRoomPcHealth.CpuPercent(e.CpuOverallUsage);
-			_pcMemoryPercent = ZoomRoomPcHealth.MemoryPercent(e.MemoryOverallUsage, e.MemorySize);
+			_pcCpuPercent = _steadyPcCpu.Next(ZoomRoomPcHealth.CpuPercent(e.CpuOverallUsage));
+			_pcMemoryPercent = _steadyPcMemory.Next(ZoomRoomPcHealth.MemoryPercent(e.MemoryOverallUsage, e.MemorySize));
 			CpuUsagePercentFeedback.FireUpdate();
 			MemoryUsagePercentFeedback.FireUpdate();
 		}
@@ -77,8 +84,8 @@ namespace PepperDash.Essentials.Plugins
 		private void ClearPcStatistics()
 		{
 			lock (_pcStatisticsLock) _pcStatisticsTimer?.Stop();
-			_pcCpuPercent = null;
-			_pcMemoryPercent = null;
+			_pcCpuPercent = _steadyPcCpu.Next(null);
+			_pcMemoryPercent = _steadyPcMemory.Next(null);
 			CpuUsagePercentFeedback.FireUpdate();
 			MemoryUsagePercentFeedback.FireUpdate();
 		}

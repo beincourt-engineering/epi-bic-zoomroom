@@ -78,6 +78,18 @@ public class PcHealthTests
             .Should().Contain("_controller.StatisticalInfoChanged += OnControllerStatisticalInfoChanged;");
     }
 
+    [Fact]
+    public void Statistics_And_The_Offline_Clear_Go_Through_The_Steady_Readings()
+    {
+        var handler = MethodBody(PcHealthSource,
+            "private void OnControllerStatisticalInfoChanged(object sender, StatisticalInfoEventArgs e)");
+        handler.Should().Contain("_pcCpuPercent = _steadyPcCpu.Next(")
+            .And.Contain("_pcMemoryPercent = _steadyPcMemory.Next(");
+        MethodBody(PcHealthSource, "private void ClearPcStatistics()")
+            .Should().Contain("_steadyPcCpu.Next(null)")
+            .And.Contain("_steadyPcMemory.Next(null)");
+    }
+
     private static string MethodBody(string source, string signature)
     {
         var match = Regex.Match(source,
