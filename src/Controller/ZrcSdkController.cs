@@ -330,6 +330,7 @@ namespace PepperDash.Essentials.Plugins
             _sdk.IntegrationEvent            += (s, e) => SafeRaise(() => IntegrationEvent?.Invoke(this, e));
             _sdk.FarEndCameraControlRequest += (s, e) => SafeRaise(() => FarEndCameraControlRequested?.Invoke(this, e));
             _sdk.MeetingRecordingInfoChanged += (s, e) => SafeRaise(() => MeetingRecordingInfoChanged?.Invoke(this, e));
+            _sdk.StatisticalInfoChanged  += (s, e) => SafeRaise(() => StatisticalInfoChanged?.Invoke(this, e));
             _sdk.CameraPresetInfoChanged += (s, e) => SafeRaise(() => CameraPresetInfoChanged?.Invoke(this, e));
             _sdk.ParticipantsInitialized += (s, e) => SafeRaise(() => ParticipantsInitialized?.Invoke(this, e));
             _sdk.UserJoined              += (s, e) => SafeRaise(() => UserJoined?.Invoke(this, e));
@@ -649,6 +650,8 @@ namespace PepperDash.Essentials.Plugins
         public float GetSpeakerVolume()                        => _sdk.GetSpeakerVolume(out var v) ? v : -1f;
         public bool SetMicrophoneVolume(float volume)          => Guard(nameof(SetMicrophoneVolume)) && Rc(nameof(SetMicrophoneVolume), _sdk.SetMicrophoneVolume(volume));
         public float GetMicrophoneVolume()                     => _sdk.GetMicrophoneVolume(out var v) ? v : -1f;
+        // Not through Rc: statistics are optional, so a room that refuses them is no strike against its health.
+        public bool EnableStatisticalInfo(bool enable)         => Guard(nameof(EnableStatisticalInfo)) && _sdk.EnableStatisticalInfo(enable);
 
         // ── Video ─────────────────────────────────────────────────────────────
 
@@ -777,6 +780,7 @@ namespace PepperDash.Essentials.Plugins
         public event EventHandler<IntegrationEventArgs> IntegrationEvent;
         public event EventHandler<SdkEventArgs> FarEndCameraControlRequested;
         public event EventHandler<MeetingRecordingInfoEventArgs> MeetingRecordingInfoChanged;
+        public event EventHandler<StatisticalInfoEventArgs> StatisticalInfoChanged;
         public event EventHandler<CameraPresetInfoEventArgs> CameraPresetInfoChanged;
         public event EventHandler<ParticipantListEventArgs> ParticipantsInitialized;
         public event EventHandler<ParticipantListEventArgs> UserJoined;

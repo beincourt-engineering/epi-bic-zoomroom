@@ -28,5 +28,6 @@
   <ItemGroup>
     <!-- Pure logic with no Crestron or SDK dependencies, compiled in so its behaviour can be tested -->
     <Compile Include="..\src\CameraTileLayout.cs" Link="Plugin\CameraTileLayout.cs" />
+    <Compile Include="..\src\ZoomRoomPcHealth.cs" Link="Plugin\ZoomRoomPcHealth.cs" />
   </ItemGroup>
 </Project>

@@ -97,6 +97,7 @@ public class ControllerAbstractionTests
     [InlineData("GetSpeakerVolume")]
     [InlineData("SetMicrophoneVolume")]
     [InlineData("GetMicrophoneVolume")]
+    [InlineData("EnableStatisticalInfo")]
     public void IZoomRoomController_Has_Audio_Method(string methodName)
     {
         ControllerInterfaceType
@@ -303,6 +304,7 @@ public class ControllerAbstractionTests
     [InlineData("AudioMuteStatusChanged")]
     [InlineData("RecordingStatusChanged")]
     [InlineData("RecordingRequestReceived")]
+    [InlineData("StatisticalInfoChanged")]
     public void IZoomRoomController_Has_SdkEvent(string eventName)
     {
         ControllerInterfaceType

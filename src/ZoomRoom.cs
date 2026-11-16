@@ -260,6 +260,10 @@ namespace PepperDash.Essentials.Plugins
 
 			MeetingIsLockedFeedback = new BoolFeedback("meetingIsLocked", () => _sdkMeetingLocked);
 
+			// The Room PC's own health (see ZoomRoom.PcHealth.cs): 0 until the room reports it.
+			CpuUsagePercentFeedback = new IntFeedback("cpuUsagePercent", () => _pcCpuPercent ?? 0);
+			MemoryUsagePercentFeedback = new IntFeedback("memoryUsagePercent", () => _pcMemoryPercent ?? 0);
+
 			MeetingIsRecordingFeedback = new BoolFeedback("meetingIsRecording", () => _sdkIsRecording);
 
 			RecordConsentPromptIsVisible = new BoolFeedback(() => _recordConsentPromptIsVisible);
@@ -284,6 +288,8 @@ namespace PepperDash.Essentials.Plugins
 				MeetingIsRecordingFeedback,
 				MeetingIsLockedFeedback,
 				PhoneOffHookFeedback,
+				CpuUsagePercentFeedback,
+				MemoryUsagePercentFeedback,
 			};
 		}
 
@@ -892,6 +898,7 @@ namespace PepperDash.Essentials.Plugins
 			_controller.SipCallStatusChanged += OnControllerSipCallStatusChanged;
 			_controller.ContactListChanged += OnControllerContactListChanged;
 			_controller.MeetingListChanged += OnControllerMeetingListChanged;
+			_controller.StatisticalInfoChanged += OnControllerStatisticalInfoChanged;
 
 			if (!_controller.Initialize(_props.SdkConfigPath))
 			{
@@ -927,6 +934,8 @@ namespace PepperDash.Essentials.Plugins
 				ScheduleFixedAudioLevels("controller connected");
 				// The multi-camera selection is a persistent Zoom Room setting; put back what the room wants.
 				ScheduleMultiCameraApply(3000);
+				// The Room PC's CPU and memory arrive once statistics are on; they are off after every connect.
+				SchedulePcStatisticsEnable();
 
 				// Populate near-end cameras from the SDK device list (real device IDs).
 				SetUpCameras();
@@ -980,6 +989,7 @@ namespace PepperDash.Essentials.Plugins
 			{
 				StopBookingRefreshTimer();
 				ResetMeetingState();
+				ClearPcStatistics();
 				lock (_phonebookSettleLock) _phonebookSettleTimer?.Stop();
 				lock (_directoryLock) _directoryContactsById.Clear();
 				PhonebookSyncState.CodecDisconnected();
@@ -1001,6 +1011,7 @@ namespace PepperDash.Essentials.Plugins
 			{
 				StopBookingRefreshTimer();
 				ResetMeetingState();
+				ClearPcStatistics();
 				lock (_phonebookSettleLock) _phonebookSettleTimer?.Stop();
 				lock (_directoryLock) _directoryContactsById.Clear();
 				PhonebookSyncState.CodecDisconnected();

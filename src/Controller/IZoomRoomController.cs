@@ -161,6 +161,9 @@ namespace PepperDash.Essentials.Plugins
         /// <summary>Gets the room microphone (audio input) volume in the SDK's native float scale; returns -1 on failure.</summary>
         float GetMicrophoneVolume();
 
+        /// <summary>Turns the Room PC's statistics (CPU and memory use) on or off; while on they arrive on <see cref="StatisticalInfoChanged"/>.</summary>
+        bool EnableStatisticalInfo(bool enable);
+
         // ── Video ─────────────────────────────────────────────────────────────
 
         bool SetVideoState(bool start);
@@ -383,6 +386,8 @@ namespace PepperDash.Essentials.Plugins
         /// <summary>A participant asked to control this room's camera (ErrorCode = userId); answer with <see cref="RespondRemoteCameraControl"/>.</summary>
         event EventHandler<SdkEventArgs> FarEndCameraControlRequested;
         event EventHandler<MeetingRecordingInfoEventArgs> MeetingRecordingInfoChanged;
+        /// <summary>The Room PC's statistics, sent while <see cref="EnableStatisticalInfo"/> is on.</summary>
+        event EventHandler<StatisticalInfoEventArgs> StatisticalInfoChanged;
         event EventHandler<CameraPresetInfoEventArgs> CameraPresetInfoChanged;
         event EventHandler<ParticipantListEventArgs> ParticipantsInitialized;
         event EventHandler<ParticipantListEventArgs> UserJoined;

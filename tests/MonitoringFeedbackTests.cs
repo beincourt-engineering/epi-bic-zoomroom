@@ -38,6 +38,8 @@ public class MonitoringFeedbackTests
     [Theory]
     [InlineData("InCallFeedback", "BoolFeedback")]
     [InlineData("ParticipantCountFeedback", "IntFeedback")]
+    [InlineData("CpuUsagePercentFeedback", "IntFeedback")]
+    [InlineData("MemoryUsagePercentFeedback", "IntFeedback")]
     public void ZoomRoom_Exposes_Call_State_Feedback(string name, string typeName)
     {
         ZoomRoomType.GetProperties()
@@ -50,6 +52,8 @@ public class MonitoringFeedbackTests
     [InlineData("MeetingIsRecordingFeedback", "meetingIsRecording")]
     [InlineData("MeetingIsLockedFeedback", "meetingIsLocked")]
     [InlineData("PhoneOffHookFeedback", "phoneOffHook")]
+    [InlineData("CpuUsagePercentFeedback", "cpuUsagePercent")]
+    [InlineData("MemoryUsagePercentFeedback", "memoryUsagePercent")]
     public void Monitored_Feedback_Is_Built_With_Its_Key(string property, string key)
     {
         // Unkeyed feedbacks are skipped by monitoring consumers, and the keys are what they are
@@ -74,7 +78,10 @@ public class MonitoringFeedbackTests
                 "SharingContentIsOnFeedback",
                 "MeetingIsRecordingFeedback",
                 "MeetingIsLockedFeedback",
-                "PhoneOffHookFeedback");
+                "PhoneOffHookFeedback",
+                // the Room PC's own health, under the keys Court Central charts for any device
+                "CpuUsagePercentFeedback",
+                "MemoryUsagePercentFeedback");
     }
 
     [Theory]
