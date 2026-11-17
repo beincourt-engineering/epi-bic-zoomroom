@@ -86,6 +86,45 @@ public class SteadyReadingTests
             memory.Next(r).Should().Be(78);
     }
 
+    [Fact]
+    public void Offering_No_Reading_Keeps_The_One_Shown()
+    {
+        var cpu = new SteadyReading(10);
+        cpu.Offer(38);
+        cpu.Offer(null).Should().Be(38);
+        cpu.Offer(29).Should().Be(38, "29 is within a step of 38, and the empty message in between didn't clear it");
+    }
+
+    [Fact]
+    public void Empty_Messages_Between_Readings_No_Longer_Break_The_Hold()
+    {
+        // JSC after the 16:13 restart, if empty messages fall between the readings Central saw.
+        int?[] readings = { 38, null, 29, null, 33, null, 30, null, 49 };
+        var cpu = new SteadyReading(10);
+        var shown = readings.Select(r => cpu.Offer(r)).ToArray();
+        shown.Should().Equal(38, 38, 38, 38, 38, 38, 38, 38, 49);
+
+        // The same messages through Next: every empty one clears, so each reading shows at once.
+        var old = new SteadyReading(10);
+        readings.Select(r => old.Next(r)).Where(v => v.HasValue)
+            .Should().Equal(38, 29, 33, 30, 49);
+    }
+
+    [Fact]
+    public void Offer_Starts_From_Nothing_Shown()
+    {
+        new SteadyReading(10).Offer(null).Should().BeNull();
+    }
+
+    [Fact]
+    public void Clearing_With_Next_Still_Works_After_Offers()
+    {
+        var cpu = new SteadyReading(10);
+        cpu.Offer(40);
+        cpu.Next(null).Should().BeNull();
+        cpu.Offer(42).Should().Be(42);
+    }
+
     [Theory]
     [InlineData(0)]
     [InlineData(-1)]

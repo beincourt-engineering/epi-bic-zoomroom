@@ -54,6 +54,42 @@ public class PcHealthTests
     }
 
     [Fact]
+    public void Memory_Use_Of_0_Is_Unread()
+    {
+        // A running PC always uses some memory; 0 is a message with nothing in it.
+        ZoomRoomPcHealth.MemoryPercent(0, 16384).Should().BeNull();
+        ZoomRoomPcHealth.MemoryPercent(0, 0).Should().BeNull();
+    }
+
+    [Theory]
+    [InlineData(0, null, null)] // 0% CPU, memory unread: an empty message
+    [InlineData(0, 40, 0)]      // 0% CPU beside real memory: an idle PC
+    [InlineData(31, null, 31)]  // a real CPU figure stands on its own
+    [InlineData(101, 40, null)] // still kept only as a percentage
+    public void Cpu_Use_Is_Read_With_The_Memory_In_The_Same_Message(int sdk, int? memory, int? expected)
+    {
+        ZoomRoomPcHealth.CpuPercent(sdk, memory).Should().Be(expected);
+    }
+
+    [Fact]
+    public void A_Figure_That_Cannot_Be_Read_Keeps_The_One_Shown()
+    {
+        var handler = MethodBody(PcHealthSource,
+            "private void OnControllerStatisticalInfoChanged(object sender, StatisticalInfoEventArgs e)");
+        handler.Should().Contain("ZoomRoomPcHealth.CpuPercent(e.CpuOverallUsage, memory)")
+            .And.NotContain(".Next(", "only going offline may clear the figures shown");
+    }
+
+    [Fact]
+    public void Every_Message_Is_Logged_At_Debug_Level()
+    {
+        MethodBody(PcHealthSource,
+                "private void OnControllerStatisticalInfoChanged(object sender, StatisticalInfoEventArgs e)")
+            .Should().Contain("this.LogDebug(")
+            .And.Contain("Room PC statistics resumed after");
+    }
+
+    [Fact]
     public void Statistics_Are_Switched_On_From_A_Timer_After_Connect()
     {
         // SDK calls made inside an SDK status event fail, so the connect handler only schedules it.
@@ -83,8 +119,8 @@ public class PcHealthTests
     {
         var handler = MethodBody(PcHealthSource,
             "private void OnControllerStatisticalInfoChanged(object sender, StatisticalInfoEventArgs e)");
-        handler.Should().Contain("_pcCpuPercent = _steadyPcCpu.Next(")
-            .And.Contain("_pcMemoryPercent = _steadyPcMemory.Next(");
+        handler.Should().Contain("_pcCpuPercent = _steadyPcCpu.Offer(")
+            .And.Contain("_pcMemoryPercent = _steadyPcMemory.Offer(");
         MethodBody(PcHealthSource, "private void ClearPcStatistics()")
             .Should().Contain("_steadyPcCpu.Next(null)")
             .And.Contain("_steadyPcMemory.Next(null)");

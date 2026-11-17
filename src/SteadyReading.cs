@@ -39,5 +39,18 @@ namespace PepperDash.Essentials.Plugins
 				return _shown;
 			}
 		}
+
+		/// <summary>
+		/// Like <see cref="Next"/>, but no reading (a message whose figure couldn't be read) keeps the one
+		/// shown instead of clearing it. Use <see cref="Next"/> with null to clear, for example when the
+		/// device goes offline.
+		/// </summary>
+		public int? Offer(int? reading)
+		{
+			lock (_lock)
+			{
+				return reading.HasValue ? Next(reading) : _shown;
+			}
+		}
 	}
 }

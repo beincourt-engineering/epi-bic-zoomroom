@@ -17,6 +17,10 @@ namespace PepperDash.Essentials.Plugins
 		private readonly object _pcStatisticsLock = new object();
 		private CTimer _pcStatisticsTimer;
 		private bool _pcStatisticsLogged;
+		private bool _pcStatisticsUnreadLogged;
+		private int _pcStatisticsMessages;
+		private DateTime? _pcStatisticsLastAt;
+		private static readonly TimeSpan PcStatisticsQuietSpell = TimeSpan.FromMinutes(5);
 
 		private int? _pcCpuPercent;
 		private int? _pcMemoryPercent;
@@ -74,8 +78,31 @@ namespace PepperDash.Essentials.Plugins
 					e.CpuOverallUsage, e.CpuZoomRoomsUsage, e.MemoryOverallUsage, e.MemoryZoomRoomsUsage, e.MemorySize, e.CpuCoreCount);
 			}
 
-			_pcCpuPercent = _steadyPcCpu.Next(ZoomRoomPcHealth.CpuPercent(e.CpuOverallUsage));
-			_pcMemoryPercent = _steadyPcMemory.Next(ZoomRoomPcHealth.MemoryPercent(e.MemoryOverallUsage, e.MemorySize));
+			// Every message's raw figures, at debug level, to see what the SDK sends between Central's reads.
+			var now = DateTime.UtcNow;
+			_pcStatisticsMessages++;
+			this.LogDebug(
+				"Room PC statistics message {Count}: cpu overall {CpuOverall}, memory overall {MemOverall}, memory size {MemSize}",
+				_pcStatisticsMessages, e.CpuOverallUsage, e.MemoryOverallUsage, e.MemorySize);
+
+			// A long silence then a message: statistics had stopped, and the figure shown was stale.
+			if (_pcStatisticsLastAt.HasValue && now - _pcStatisticsLastAt.Value >= PcStatisticsQuietSpell)
+				this.LogInformation("Room PC statistics resumed after {Minutes:0} min with none", (now - _pcStatisticsLastAt.Value).TotalMinutes);
+			_pcStatisticsLastAt = now;
+
+			var memory = ZoomRoomPcHealth.MemoryPercent(e.MemoryOverallUsage, e.MemorySize);
+			var cpu = ZoomRoomPcHealth.CpuPercent(e.CpuOverallUsage, memory);
+			if ((!cpu.HasValue || !memory.HasValue) && !_pcStatisticsUnreadLogged)
+			{
+				_pcStatisticsUnreadLogged = true;
+				this.LogInformation(
+					"Room PC statistics message with a figure that can't be read (first this run), last figures kept: cpu overall {CpuOverall}, memory overall {MemOverall}, memory size {MemSize}",
+					e.CpuOverallUsage, e.MemoryOverallUsage, e.MemorySize);
+			}
+
+			// A figure that can't be read keeps the one shown: only going offline clears them.
+			_pcCpuPercent = _steadyPcCpu.Offer(cpu);
+			_pcMemoryPercent = _steadyPcMemory.Offer(memory);
 			CpuUsagePercentFeedback.FireUpdate();
 			MemoryUsagePercentFeedback.FireUpdate();
 		}

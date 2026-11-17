@@ -17,9 +17,19 @@ namespace PepperDash.Essentials.Plugins
 			return cpuOverallUsage >= 0 && cpuOverallUsage <= 100 ? cpuOverallUsage : (int?)null;
 		}
 
+		/// <summary>
+		/// CPU use from a whole message: 0% beside memory that can't be read is a message with nothing in
+		/// it, not an idle PC. 0% beside a real memory figure is kept.
+		/// </summary>
+		public static int? CpuPercent(int cpuOverallUsage, int? memoryPercent)
+		{
+			return cpuOverallUsage == 0 && !memoryPercent.HasValue ? null : CpuPercent(cpuOverallUsage);
+		}
+
+		/// <summary>Memory use, percent. 0 is never a reading: a running PC always uses some memory.</summary>
 		public static int? MemoryPercent(int memoryOverallUsage, int memorySize)
 		{
-			if (memoryOverallUsage < 0)
+			if (memoryOverallUsage <= 0)
 				return null;
 			if (memoryOverallUsage <= 100)
 				return memoryOverallUsage;
