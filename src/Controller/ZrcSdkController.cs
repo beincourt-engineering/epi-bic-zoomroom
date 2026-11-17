@@ -28,11 +28,26 @@ namespace PepperDash.Essentials.Plugins
         private CTimer _reconnectTimer;
         private int _reconnectAttempt;
         private bool _isConnected;
-        private static readonly int[] ReconnectDelaysMs = { 5000, 10000, 20000, 30000, 60000 };
+        private readonly object _reconnectLock = new object();
 
-        // Stored-pairing fallback: when Zoom's server rejects the stored pairing (as opposed to the room
-        // or the cloud being unreachable), RetryToPairRoom can never succeed again, so re-pair once with
-        // the configured activation code. Re-armed by the next successful pair. 100006000 is deliberately
+        // When to ask Zoom again, and this room's offset among the rooms sharing the SDK.
+        private readonly ReconnectPolicy _policy;
+
+        // The first request after a program start: sent after the room's offset, and repeated if Zoom
+        // gives no answer within ReconnectPolicy.StartupAnswerTimeoutMs.
+        private CTimer _startupPairTimer;
+        private CTimer _answerTimer;
+        private bool _awaitingAnswer;
+        private bool _startupRequestSent;
+
+        // Set when there is no stored pairing to retry, so the health poll does not restart a loop
+        // that can only stop again. Cleared by the next pair attempt.
+        private bool _noStoredPairing;
+
+        // Refusals of the stored pairing (as opposed to the room or the cloud being unreachable). A first
+        // refusal can be false, so it is checked again after a minute; an unused configured activation
+        // code is tried once first (re-armed by the next successful pair). A second refusal in a row
+        // slows the room to ReconnectPolicy.RefusedRetryMs until a new code pairs it. 100006000 is deliberately
         // not listed: it is undocumented, has been seen with no stored pairing at all, and arrived about
         // 10 s after the request while the processor could not reach Zoom's cloud (a wrong default
         // gateway). That looks like a timeout, and treating it as a rejection would discard a good stored
@@ -67,6 +82,7 @@ namespace PepperDash.Essentials.Plugins
             _sdkConfigPath  = sdkConfigPath  ?? "/user/zrcsdk";
             _activationCode = activationCode ?? string.Empty;
             _roomId         = string.IsNullOrWhiteSpace(roomId) ? null : roomId.Trim();
+            _policy         = new ReconnectPolicy(ReconnectPolicy.TakeSlot());
 
             // The ZRC SDK loads its native wrapper (libzrcsdkwrapperpdt.so) from /usr/lib by
             // default, but /usr/lib is a read-only filesystem at program runtime. The wrapper is
@@ -264,8 +280,10 @@ namespace PepperDash.Essentials.Plugins
                     _isConnected = true;
                     _everConnected = true;
                     _consecutiveCommandFailures = 0;
-                    // Successfully reconnected — cancel any pending retry and reset the counter.
+                    StopAnswerTimer();
+                    // Successfully reconnected — cancel any pending retry and start the schedule over.
                     CancelReconnect();
+                    _policy.Connected();
                     SafeRaise(() => HealthStateChanged?.Invoke(this, true));
                 }
                 SafeRaise(() => ConnectionStateChanged?.Invoke(this, e));
@@ -273,16 +291,29 @@ namespace PepperDash.Essentials.Plugins
             _sdk.Error                   += (s, e) => SafeRaise(() => Error?.Invoke(this, e));
             _sdk.PairRoomResult          += (s, e) =>
             {
-                this.LogInformation("PairRoomResult: [{ErrorCode}] {Message}",
-                    e.ErrorCode, ZrcSdkCodes.GetPairRoomResultDescription(e.ErrorCode));
+                // Only timers are touched here: SDK commands made inside an SDK callback fail.
+                StopAnswerTimer();
                 if (e.ErrorCode == 0)
                 {
+                    this.LogInformation("PairRoomResult: [{ErrorCode}] {Message}",
+                        e.ErrorCode, ZrcSdkCodes.GetPairRoomResultDescription(e.ErrorCode));
                     _storedPairingFallbackUsed = false;
+                    _policy.Connected();
                     if (!_lastPairUsedStoredCredentials && !string.IsNullOrEmpty(_lastPairActivationCode))
                         RememberPairedActivationCode(_lastPairActivationCode);
                 }
                 else if (_lastPairUsedStoredCredentials && Array.IndexOf(StoredPairingRejectedCodes, e.ErrorCode) >= 0)
-                    FallBackToActivationCode(e.ErrorCode);
+                {
+                    OnStoredPairingRefused(e.ErrorCode);
+                }
+                else
+                {
+                    this.LogInformation("PairRoomResult: [{ErrorCode}] {Message}",
+                        e.ErrorCode, ZrcSdkCodes.GetPairRoomResultDescription(e.ErrorCode));
+                    // Any other failure (room or cloud unreachable, a bad code): keep asking. No-op
+                    // when the reconnect loop is already running.
+                    if (!_isConnected) ScheduleReconnect();
+                }
                 SafeRaise(() => PairRoomResult?.Invoke(this, e));
             };
             _sdk.MeetingStatus           += (s, e) => SafeRaise(() => MeetingStatusChanged?.Invoke(this, e));
@@ -361,11 +392,37 @@ namespace PepperDash.Essentials.Plugins
                 return false;
             }
 
-            // Auto-reconnect or pair with activation code
+            // Rooms sharing the SDK ask Zoom in turn, a few seconds apart, so their first requests never
+            // reach Zoom at the same moment.
+            if (_policy.OffsetMs == 0)
+            {
+                StartupPair();
+            }
+            else
+            {
+                this.LogInformation("Pairing in {Seconds} s, after the {Count} Zoom Room(s) ahead of it on this SDK.",
+                    _policy.OffsetMs / 1000, _policy.Slot);
+                _startupPairTimer = new CTimer(_ =>
+                {
+                    if (_disposed) return;
+                    try { StartupPair(); }
+                    catch (Exception ex) { this.LogError(ex, "Pairing at startup failed: {Message}", ex.Message); }
+                }, null, _policy.OffsetMs);
+            }
+
+            return result;
+        }
+
+        // The first request after a program start: the stored pairing if there is one, else the
+        // configured activation code. Waits ReconnectPolicy.StartupAnswerTimeoutMs for an answer.
+        private void StartupPair()
+        {
             if (_sdk.CanRetryToPairLastRoom())
             {
                 this.LogInformation("Stored pairing credentials found — reconnecting...");
                 _lastPairUsedStoredCredentials = true;
+                _startupRequestSent = true;
+                ArmAnswerTimer();
                 _sdk.RetryToPairRoom();
             }
             else if (!string.IsNullOrEmpty(_activationCode))
@@ -373,14 +430,52 @@ namespace PepperDash.Essentials.Plugins
                 this.LogInformation("No stored credentials — pairing with activation code.");
                 if (ConfiguredCodeAlreadyPaired())
                     this.LogWarning("The configured activation code already paired this room once; Zoom may reject it. If it does, generate a new code in the Zoom portal and run 'pairZoomRoom'.");
+                _startupRequestSent = true;
+                ArmAnswerTimer();
                 PairWithActivationCode(_activationCode);
             }
             else
             {
                 this.LogInformation("No stored credentials and no activationCode configured. Use console command 'pairZoomRoom <code>'.");
             }
+        }
 
-            return result;
+        // Zoom normally answers a pair request within a second or two. With no answer at all nothing
+        // else would ever ask again, so after the timeout the repair is sent and the reconnect loop
+        // takes over.
+        private void ArmAnswerTimer()
+        {
+            lock (_reconnectLock)
+            {
+                _awaitingAnswer = true;
+                _answerTimer?.Dispose();
+                _answerTimer = new CTimer(_ => OnNoAnswer(), null, ReconnectPolicy.StartupAnswerTimeoutMs);
+            }
+        }
+
+        private void StopAnswerTimer()
+        {
+            lock (_reconnectLock)
+            {
+                _awaitingAnswer = false;
+                _answerTimer?.Dispose();
+                _answerTimer = null;
+            }
+        }
+
+        private void OnNoAnswer()
+        {
+            lock (_reconnectLock)
+            {
+                if (_disposed || _isConnected || !_awaitingAnswer) return;
+                _awaitingAnswer = false;
+                _answerTimer?.Dispose();
+                _answerTimer = null;
+            }
+
+            this.LogWarning("No answer from Zoom {Seconds} s after asking to pair; sending the repair now.",
+                ReconnectPolicy.StartupAnswerTimeoutMs / 1000);
+            ScheduleReconnect(sendNow: true);
         }
 
         private void SafeRaise(Action raise)
@@ -417,6 +512,7 @@ namespace PepperDash.Essentials.Plugins
         {
             _lastPairUsedStoredCredentials = false;
             _lastPairActivationCode = activationCode?.Trim();
+            _noStoredPairing = false;
             return _sdk.PairRoomWithActivationCode(activationCode);
         }
 
@@ -425,6 +521,7 @@ namespace PepperDash.Essentials.Plugins
         public bool RetryPair()
         {
             _lastPairUsedStoredCredentials = true;
+            _noStoredPairing = false;
             return _sdk.RetryToPairRoom();
         }
 
@@ -488,48 +585,54 @@ namespace PepperDash.Essentials.Plugins
             }
         }
 
-        // Called from the SDK's PairRoomResult event when the server rejected the stored pairing. Runs
-        // the re-pair on a timer rather than inside the SDK callback, once until a pair succeeds again.
-        private void FallBackToActivationCode(int errorCode)
+        // Called from the SDK's PairRoomResult event when Zoom refused the stored pairing; only timers are
+        // touched here. A first refusal can be false (several rooms asking at once has produced one), so
+        // it is checked once more after a minute, and an unused configured activation code is tried
+        // first, once. A second refusal in a row means the room needs a new code: it then asks only every
+        // 10 minutes, so its refused requests don't disturb the other rooms on the same SDK.
+        private void OnStoredPairingRefused(int errorCode)
         {
             if (_disposed) return;
 
-            if (string.IsNullOrEmpty(_activationCode))
-            {
-                this.LogWarning("Zoom rejected the stored pairing (code {Code}) and no activationCode is configured. Pair with 'pairZoomRoom <code>'.", errorCode);
-                return;
-            }
+            var delayMs = _policy.NextAfterRefusal();
+            var refusals = _policy.ConsecutiveRefusals;
+            var description = ZrcSdkCodes.GetPairRoomResultDescription(errorCode);
 
-            if (ConfiguredCodeAlreadyPaired())
+            if (refusals == 1)
             {
-                this.LogWarning("Zoom rejected the stored pairing (code {Code}), and the configured activation code has already paired this room, so Zoom will not accept it again. Generate a new code in the Zoom portal and run 'pairZoomRoom'.", errorCode);
-                return;
-            }
-
-            if (_storedPairingFallbackUsed)
-            {
-                this.LogWarning("Zoom rejected the stored pairing (code {Code}) again after re-pairing with the configured activation code. Check the code in the Zoom portal and pair with 'pairZoomRoom <code>'.", errorCode);
-                return;
-            }
-
-            _storedPairingFallbackUsed = true;
-            this.LogWarning("Zoom rejected the stored pairing (code {Code}); re-pairing with the configured activation code.", errorCode);
-
-            _storedPairingFallbackTimer?.Dispose();
-            _storedPairingFallbackTimer = new CTimer(_ =>
-            {
-                if (_disposed) return;
-                try
+                this.LogInformation("PairRoomResult: [{ErrorCode}] {Message}", errorCode, description);
+                if (!string.IsNullOrEmpty(_activationCode) && !ConfiguredCodeAlreadyPaired() && !_storedPairingFallbackUsed)
                 {
-                    // The stored pairing is dead, so the reconnect loop's RetryToPairRoom cannot help.
-                    CancelReconnect();
-                    RepairWithConfiguredCode();
+                    _storedPairingFallbackUsed = true;
+                    this.LogWarning("Zoom refused the stored pairing (code {Code}); re-pairing with the configured activation code.", errorCode);
+                    _storedPairingFallbackTimer?.Dispose();
+                    _storedPairingFallbackTimer = new CTimer(_ =>
+                    {
+                        if (_disposed) return;
+                        try { RepairWithConfiguredCode(); }
+                        catch (Exception ex) { this.LogError(ex, "Re-pairing with the configured activation code failed: {Message}", ex.Message); }
+                    }, null, StoredPairingFallbackDelayMs);
                 }
-                catch (Exception ex)
+                else
                 {
-                    this.LogError(ex, "Re-pairing with the configured activation code failed: {Message}", ex.Message);
+                    this.LogInformation("Zoom refused the stored pairing (code {Code}). A first refusal can be false, so it is checked again in {Seconds} s.",
+                        errorCode, delayMs / 1000);
                 }
-            }, null, StoredPairingFallbackDelayMs);
+            }
+            else if (refusals == 2)
+            {
+                this.LogInformation("PairRoomResult: [{ErrorCode}] {Message}", errorCode, description);
+                this.LogWarning("Zoom refused the stored pairing twice in a row (code {Code}). This Zoom Room needs a new activation code: generate one in the Zoom portal and run 'pairZoomRoom {Key} <code>'. Until then it asks again every {Minutes} minutes.",
+                    errorCode, Key, ReconnectPolicy.RefusedRetryMs / 60000);
+            }
+            else
+            {
+                this.LogDebug("PairRoomResult: [{ErrorCode}] {Message} (refusal {Count} in a row; next request in {Minutes} min)",
+                    errorCode, description, refusals, delayMs / 60000);
+            }
+
+            // Replaces the loop's next step, which was set for a failure that is not a refusal.
+            RescheduleReconnect(delayMs);
         }
 
         // ── Device ────────────────────────────────────────────────────────────
@@ -807,6 +910,9 @@ namespace PepperDash.Essentials.Plugins
             if (_disposed) return;
             _disposed = true;
             CancelReconnect();
+            StopAnswerTimer();
+            _startupPairTimer?.Dispose();
+            _startupPairTimer = null;
             _storedPairingFallbackTimer?.Dispose();
             _storedPairingFallbackTimer = null;
             CrestronEnvironment.ProgramStatusEventHandler -= OnProgramStatusEvent;
@@ -821,49 +927,90 @@ namespace PepperDash.Essentials.Plugins
             }
         }
 
-        private void ScheduleReconnect()
+        private void ScheduleReconnect() => ScheduleReconnect(sendNow: false);
+
+        // Starts the reconnect loop unless it is already running: a single self-perpetuating loop, so
+        // extra triggers (SDK event, poll, command failures, failed pair results) no-op. Makes no SDK
+        // call, so it is safe from inside an SDK callback.
+        private void ScheduleReconnect(bool sendNow)
         {
             if (_disposed) return;
-            // A single self-perpetuating loop; extra triggers (SDK event, poll, command failures) no-op.
-            if (_reconnectTimer != null) return;
-            ScheduleNextReconnect();
+            lock (_reconnectLock)
+            {
+                if (_reconnectTimer != null) return;
+                StartNextAttemptLocked(sendNow ? 0 : _policy.NextAfterFailure());
+            }
         }
 
-        private void ScheduleNextReconnect()
+        // Replaces the pending attempt with one at the given delay (used after a refusal).
+        private void RescheduleReconnect(long delayMs)
         {
             if (_disposed) return;
-            if (!_sdk.CanRetryToPairLastRoom())
+            lock (_reconnectLock)
             {
-                this.LogWarning("Disconnected and no stored pairing credentials — cannot auto-reconnect.");
-                _reconnectTimer?.Dispose();
-                _reconnectTimer = null;
-                return;
+                if (_isConnected) return;
+                StartNextAttemptLocked(delayMs);
             }
+        }
 
+        private void StartNextAttemptLocked(long delayMs)
+        {
             _reconnectAttempt++;
-            // Escalating backoff for the first few tries, then hold at the max delay indefinitely.
             // Never give up: an unattended room must self-heal whenever it becomes reachable again.
-            var delayMs = ReconnectDelaysMs[Math.Min(_reconnectAttempt - 1, ReconnectDelaysMs.Length - 1)];
-            this.LogInformation("Disconnected — reconnect attempt {Attempt} in {Delay}ms", _reconnectAttempt, delayMs);
-
+            if (delayMs > 0)
+                this.LogInformation("Disconnected — reconnect attempt {Attempt} in {Delay}ms", _reconnectAttempt, delayMs);
             _reconnectTimer?.Dispose();
-            _reconnectTimer = new CTimer(_ =>
+            _reconnectTimer = new CTimer(_ => RunReconnectAttempt(), null, delayMs);
+        }
+
+        // Runs on the loop's timer thread, never inside an SDK callback.
+        private void RunReconnectAttempt()
+        {
+            if (_disposed) return;
+            try
             {
-                if (_disposed) return;
-                this.LogInformation("Auto-reconnect attempt {Attempt}: calling RetryToPairRoom()", _reconnectAttempt);
+                if (!_sdk.CanRetryToPairLastRoom())
+                {
+                    this.LogWarning("Disconnected and no stored pairing credentials — cannot auto-reconnect.");
+                    _noStoredPairing = true;
+                    lock (_reconnectLock)
+                    {
+                        _reconnectTimer?.Dispose();
+                        _reconnectTimer = null;
+                    }
+                    return;
+                }
+
+                int attempt;
+                lock (_reconnectLock)
+                {
+                    if (_disposed || _isConnected || _reconnectTimer == null) return;
+                    attempt = _reconnectAttempt;
+                    // The next step is set before asking, so a request that gets no answer still leads to
+                    // another, and a refusal answer (which can only come after this) replaces it with the
+                    // slower pace. A successful pair fires ConnectionStateChanged(Connected) ->
+                    // CancelReconnect(), which stops the loop.
+                    StartNextAttemptLocked(_policy.NextAfterFailure());
+                }
+
+                this.LogInformation("Auto-reconnect attempt {Attempt}: calling RetryToPairRoom()", attempt);
                 _lastPairUsedStoredCredentials = true;
                 _sdk.RetryToPairRoom();
-                // A successful pair fires ConnectionStateChanged(Connected) -> CancelReconnect() stops
-                // this loop. If it didn't (silent failure), keep retrying at the capped delay.
-                if (!_disposed && !_isConnected) ScheduleNextReconnect();
-            }, null, delayMs);
+            }
+            catch (Exception ex)
+            {
+                this.LogError(ex, "Reconnect attempt failed: {Message}", ex.Message);
+            }
         }
 
         private void CancelReconnect()
         {
-            _reconnectAttempt = 0;
-            _reconnectTimer?.Dispose();
-            _reconnectTimer = null;
+            lock (_reconnectLock)
+            {
+                _reconnectAttempt = 0;
+                _reconnectTimer?.Dispose();
+                _reconnectTimer = null;
+            }
         }
 
         // ── Health watchdog ─────────────────────────────────────────────────────
@@ -889,8 +1036,16 @@ namespace PepperDash.Essentials.Plugins
 
         public void RunHealthCheck(string reason)
         {
-            // Only guards an established pairing; before the first connect the pairing flow handles it.
-            if (_disposed || !_everConnected) return;
+            if (_disposed) return;
+
+            // Not connected since the program started: there is no link to probe, so make sure something
+            // is still asking Zoom. Normally the startup request's answer (or its timeout) already has.
+            if (!_everConnected)
+            {
+                if (!_isConnected && _startupRequestSent && !_awaitingAnswer && !_noStoredPairing)
+                    ScheduleReconnect();
+                return;
+            }
 
             lock (_healthLock)
             {
