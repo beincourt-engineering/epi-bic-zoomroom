@@ -163,6 +163,12 @@ namespace PepperDash.Essentials.Plugins
         /// <summary>Turns the Room PC's statistics (CPU and memory use) on or off; while on they arrive on <see cref="StatisticalInfoChanged"/>.</summary>
         bool EnableStatisticalInfo(bool enable);
 
+        /// <summary>
+        /// The paired Zoom Room's name, display name and IP address; null when the SDK isn't paired or doesn't
+        /// answer. Call it outside an SDK callback.
+        /// </summary>
+        PairedRoomInfo GetLastZoomRoomInfo();
+
         // ── Video ─────────────────────────────────────────────────────────────
 
         bool SetVideoState(bool start);

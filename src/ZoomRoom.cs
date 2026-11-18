@@ -936,6 +936,8 @@ namespace PepperDash.Essentials.Plugins
 				ScheduleMultiCameraApply(3000);
 				// The Room PC's CPU and memory arrive once statistics are on; they are off after every connect.
 				SchedulePcStatisticsEnable();
+				// The room's name and address, for its device info (ZoomRoom.Identity.cs).
+				ScheduleRoomIdentityRead();
 
 				// Populate near-end cameras from the SDK device list (real device IDs).
 				SetUpCameras();

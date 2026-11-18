@@ -755,6 +755,7 @@ namespace PepperDash.Essentials.Plugins
         public float GetMicrophoneVolume()                     => _sdk.GetMicrophoneVolume(out var v) ? v : -1f;
         // Not through Rc: statistics are optional, so a room that refuses them is no strike against its health.
         public bool EnableStatisticalInfo(bool enable)         => Guard(nameof(EnableStatisticalInfo)) && _sdk.EnableStatisticalInfo(enable);
+        public PairedRoomInfo GetLastZoomRoomInfo()            => Guard(nameof(GetLastZoomRoomInfo)) ? _sdk.GetLastZoomRoomInfo() : null;
 
         // ── Video ─────────────────────────────────────────────────────────────
 
