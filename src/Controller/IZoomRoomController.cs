@@ -28,6 +28,12 @@ namespace PepperDash.Essentials.Plugins
         event EventHandler<bool> HealthStateChanged;
 
         /// <summary>
+        /// Raised when Zoom refuses the room's stored pairing, with the reason to show for the room
+        /// (see <see cref="ConnectionMessage.ForRefusal"/>). Cleared by the room coming back online.
+        /// </summary>
+        event EventHandler<string> PairingProblemChanged;
+
+        /// <summary>
         /// Actively probes the link (real SDK round-trip). If the room is unreachable it marks the
         /// controller offline and starts auto-repair; if a prior offline was a false alarm it clears it.
         /// Safe to call periodically (comms-monitor poll) or on demand (after command failures).

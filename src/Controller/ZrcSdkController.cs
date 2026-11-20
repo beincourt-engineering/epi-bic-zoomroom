@@ -73,6 +73,7 @@ namespace PepperDash.Essentials.Plugins
         private readonly object _healthLock = new object();
 
         public event EventHandler<bool> HealthStateChanged;
+        public event EventHandler<string> PairingProblemChanged;
 
         public string Key { get; }
 
@@ -597,6 +598,7 @@ namespace PepperDash.Essentials.Plugins
             var delayMs = _policy.NextAfterRefusal();
             var refusals = _policy.ConsecutiveRefusals;
             var description = ZrcSdkCodes.GetPairRoomResultDescription(errorCode);
+            var tryingConfiguredCode = false;
 
             if (refusals == 1)
             {
@@ -604,6 +606,7 @@ namespace PepperDash.Essentials.Plugins
                 if (!string.IsNullOrEmpty(_activationCode) && !ConfiguredCodeAlreadyPaired() && !_storedPairingFallbackUsed)
                 {
                     _storedPairingFallbackUsed = true;
+                    tryingConfiguredCode = true;
                     this.LogWarning("Zoom refused the stored pairing (code {Code}); re-pairing with the configured activation code.", errorCode);
                     _storedPairingFallbackTimer?.Dispose();
                     _storedPairingFallbackTimer = new CTimer(_ =>
@@ -630,6 +633,10 @@ namespace PepperDash.Essentials.Plugins
                 this.LogDebug("PairRoomResult: [{ErrorCode}] {Message} (refusal {Count} in a row; next request in {Minutes} min)",
                     errorCode, description, refusals, delayMs / 60000);
             }
+
+            // The reason Court Central shows for the room until it is back online.
+            var problem = ConnectionMessage.ForRefusal(refusals, errorCode, Key, tryingConfiguredCode);
+            SafeRaise(() => PairingProblemChanged?.Invoke(this, problem));
 
             // Replaces the loop's next step, which was set for a failure that is not a refusal.
             RescheduleReconnect(delayMs);

@@ -51,8 +51,23 @@ namespace PepperDash.Essentials.Plugins
         /// </summary>
         public void SetOnline(bool online)
         {
+            if (online) _pairingProblem = null;
+            // The message goes first, so the state change Central records already carries the reason.
+            Message  = ConnectionMessage.ForState(online, _pairingProblem);
             IsOnline = online;
             Status   = online ? MonitorStatus.IsOk : MonitorStatus.InError;
         }
+
+        /// <summary>
+        /// Called when Zoom refuses the room's stored pairing. Shown as the reason while the room is
+        /// offline, and cleared when it is back online.
+        /// </summary>
+        public void SetPairingProblem(string problem)
+        {
+            _pairingProblem = problem;
+            if (!IsOnline && !string.IsNullOrEmpty(problem)) Message = problem;
+        }
+
+        private string _pairingProblem;
     }
 }

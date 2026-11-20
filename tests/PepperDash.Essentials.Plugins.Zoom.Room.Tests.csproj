@@ -31,5 +31,6 @@
     <Compile Include="..\src\ZoomRoomPcHealth.cs" Link="Plugin\ZoomRoomPcHealth.cs" />
     <Compile Include="..\src\SteadyReading.cs" Link="Plugin\SteadyReading.cs" />
     <Compile Include="..\src\Controller\ReconnectPolicy.cs" Link="Plugin\ReconnectPolicy.cs" />
+    <Compile Include="..\src\Controller\ConnectionMessage.cs" Link="Plugin\ConnectionMessage.cs" />
   </ItemGroup>
 </Project>

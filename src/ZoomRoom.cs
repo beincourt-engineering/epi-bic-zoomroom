@@ -856,6 +856,7 @@ namespace PepperDash.Essentials.Plugins
 		{
 			_controller.ConnectionStateChanged += OnControllerConnectionStateChanged;
 			_controller.HealthStateChanged += OnControllerHealthStateChanged;
+			_controller.PairingProblemChanged += (s, problem) => _sdkMonitor.SetPairingProblem(problem);
 			_controller.PairRoomResult += (s, e) => this.LogInformation("PairRoomResult [{Code}]: {Desc}", e.ErrorCode, ZrcSdkCodes.GetPairRoomResultDescription(e.ErrorCode));
 			_controller.MeetingStatusChanged += OnControllerMeetingStatusChanged;
 			_controller.InstantMeetingStarted += OnControllerInstantMeetingStarted;
