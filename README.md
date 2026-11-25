@@ -110,7 +110,10 @@ See [docs/connection-watchdog-silent-disconnect.md](docs/connection-watchdog-sil
         "meetingInviteTimeoutMs": 0,
         "activationCode": "SampleString",
         "phoneDialMode": "SampleValue",
-        "sdkConfigPath": "SampleString"
+        "sdkConfigPath": "SampleString",
+        "sdkRoomId": "SampleString",
+        "FixedSpeakerVolume": 0,
+        "FixedMicVolume": 0
     }
 }
 ```
@@ -124,6 +127,12 @@ See [docs/connection-watchdog-silent-disconnect.md](docs/connection-watchdog-sil
 <!-- START Interfaces Implemented -->
 ### Interfaces Implemented
 
+- IDeviceInfoProvider
+- IHasCameraPtzControl
+- IHasCameraControls
+- IBridgeAdvanced
+- IAmFarEndCamera
+- INotifyPropertyChanged
 - IHasCodecSelfView
 - IHasDirectoryHistoryStack
 - ICommunicationMonitor
@@ -149,31 +158,191 @@ See [docs/connection-watchdog-silent-disconnect.md](docs/connection-watchdog-sil
 - IZoomWirelessShareInstructions
 - IHasCodecRoomPresets
 - IRoutingSinkWithFeedback
-- IHasCameraPtzControl
-- IHasCameraControls
-- IBridgeAdvanced
-- IAmFarEndCamera
-- INotifyPropertyChanged
+- IHasFeedback
 - IZoomRoomController
 - IKeyed
 <!-- END Interfaces Implemented -->
 <!-- START Base Classes -->
 ### Base Classes
 
-- VideoCodecBase
-- VideoCodecInfo
-- VideoCodecControllerJoinMap
-- NotifiableObject
-- CameraBase
-- ZoomRoomCamera
 - EventArgs
-- SelfviewOptionMessengerBase
-- MessengerBase
+- CameraBase
+- VideoCodecInfo
+- ZoomRoomCamera
+- NotifiableObject
+- VideoCodecControllerJoinMap
+- VideoCodecBase
 - StatusMonitorBase
+- MessengerBase
+- SelfviewOptionMessengerBase
 <!-- END Base Classes -->
 <!-- START Public Methods -->
 ### Public Methods
 
+- public void ZoomRoom_Implements_IHasFeedback_Explicitly()
+- public void ZoomRoom_Exposes_Call_State_Feedback(string name, string typeName)
+- public void Monitored_Feedback_Is_Built_With_Its_Key(string property, string key)
+- public void Monitored_Feedbacks_Are_The_Low_Churn_Call_State()
+- public void Meeting_Reset_Fires_The_Feedbacks_Of_The_Fields_It_Clears(string feedback)
+- public void Call_State_Feedback_Is_Fired_Where_Its_Source_Changes(string method, string feedback)
+- public void A_Failed_Sdk_Start_Puts_The_Monitor_In_Error()
+- public void ZoomRoomPropertiesConfig_Exists_In_Assembly()
+- public void ZoomRoomPropertiesConfig_Has_Parameterless_Constructor()
+- public void ZoomRoomPropertiesConfig_Property_Has_JsonPropertyAttribute(string jsonName)
+- public void IZoomRoomController_Exists_In_Assembly()
+- public void IZoomRoomController_Is_Interface()
+- public void IZoomRoomController_Extends_IDisposable()
+- public void IZoomRoomController_Has_Lifecycle_Method(string methodName)
+- public void IZoomRoomController_Has_Meeting_Method(string methodName)
+- public void IZoomRoomController_Has_Audio_Method(string methodName)
+- public void IZoomRoomController_Has_Video_Method(string methodName)
+- public void IZoomRoomController_Has_Layout_Method(string methodName)
+- public void IZoomRoomController_Has_Share_Method(string methodName)
+- public void IZoomRoomController_Has_Recording_Method(string methodName)
+- public void IZoomRoomController_Has_Participant_Method(string methodName)
+- public void IZoomRoomController_Has_WaitingRoom_Method(string methodName)
+- public void IZoomRoomController_Has_Phone_Method(string methodName)
+- public void IZoomRoomController_Has_Contacts_Method(string methodName)
+- public void IZoomRoomController_Has_ListMeeting_Method()
+- public void IZoomRoomController_Has_SelectMultipleCamera_Method()
+- public void IZoomRoomController_Has_TryGetBreakoutEnabled_Method()
+- public void IZoomRoomController_CommandMethod_Returns_Bool(string methodName)
+- public void IZoomRoomController_GetConnectionState_Returns_Int()
+- public void IZoomRoomController_Has_SdkEvent(string eventName)
+- public void IZoomRoomController_Has_ParticipantEvent(string eventName)
+- public void IZoomRoomController_Has_SharingStatusChanged_Event()
+- public void IZoomRoomController_Has_VideoPageStatusChanged_Event()
+- public void IZoomRoomController_Has_ContactListChanged_Event()
+- public void IZoomRoomController_Has_MeetingListChanged_Event()
+- public void IZoomRoomController_Has_MeetingRecordingInfoChanged_Event()
+- public void IZoomRoomController_Has_JoinMeeting_Overload_Without_Password()
+- public void IZoomRoomController_Has_JoinMeetingWithPassword_Overload()
+- public void IZoomRoomController_Has_SendMeetingPassword()
+- public void IZoomRoomController_Has_MeetingNeedsPassword_Event()
+- public void Assembly_Loads_Successfully()
+- public void Assembly_Name_Matches_Expected()
+- public void Factory_Count_Matches_Expected()
+- public void Factory_Exists_ByName(string factoryClassName)
+- public void All_Factories_Have_Parameterless_Constructor()
+- public void Factory_Source_Sets_MinimumEssentialsFrameworkVersion_To_3(string factoryClassName)
+- public void Factory_Source_Assigns_TypeNames(string factoryClassName)
+- public void Factory_Source_Contains_TypeName(string factoryClassName, string typeName)
+- public void No_Duplicate_TypeNames_Across_Factories()
+- public void Nothing_Known_Places_Children_By_Zoom_Number()
+- public void Known_Camera_Takes_Its_Input_Tile_And_Moves_The_Child_That_Had_It()
+- public void Tile_Of_A_Camera_Not_In_The_Meeting_Stays_Empty()
+- public void Later_Child_Wins_When_Two_Claim_One_Input()
+- public void Child_Without_A_Number_Takes_The_Lowest_Free_Tile()
+- public void Known_Tile_1_Is_Ignored_Because_Tile_1_Is_The_Room()
+- public void No_Children_Gives_No_Tiles()
+- public void The_First_Room_Asks_At_Once_And_Each_Room_After_It_Waits_Five_Seconds_More()
+- public void A_Negative_Slot_Is_Treated_As_The_First_Room()
+- public void Failures_Retry_After_5_10_20_And_30_Seconds_Then_Every_Minute()
+- public void Every_Retry_Keeps_The_Rooms_Offset()
+- public void A_First_Refusal_Is_Checked_Again_After_A_Minute()
+- public void A_Room_Refused_Twice_Asks_Only_Every_Ten_Minutes()
+- public void Connecting_Starts_The_Schedule_Over()
+- public void Slots_Are_Handed_Out_One_Apart_In_Creation_Order()
+- public void The_First_Reading_Shows_At_Once()
+- public void A_Reading_Within_A_Step_Holds_The_One_Shown()
+- public void A_Full_Step_Shows_The_New_Reading()
+- public void Small_Moves_Measure_From_The_Shown_Value_Not_The_Last_Reading()
+- public void No_Reading_Clears_And_The_Next_Reading_Shows_At_Once()
+- public void Jsc_In_Call_Cpu_Changes_Less_Often()
+- public void A_Spike_Still_Shows()
+- public void Flat_Memory_Never_Changes()
+- public void Offering_No_Reading_Keeps_The_One_Shown()
+- public void Empty_Messages_Between_Readings_No_Longer_Break_The_Hold()
+- public void Offer_Starts_From_Nothing_Shown()
+- public void Clearing_With_Next_Still_Works_After_Offers()
+- public void A_Step_Under_1_Is_Refused(int step)
+- public void A_Room_Refused_Twice_Needs_A_New_Activation_Code()
+- public void Later_Refusals_Say_The_Same_As_The_Second()
+- public void A_First_Refusal_Says_It_Is_Checked_Again()
+- public void A_First_Refusal_With_An_Unused_Code_Says_The_Code_Is_Being_Tried()
+- public void Online_Says_Connected_And_Never_The_Old_Problem()
+- public void Offline_Shows_The_Pairing_Problem_When_There_Is_One()
+- public void Every_Message_Is_Non_Empty_So_Telemetry_Replaces_The_Last_One()
+- public void The_Controller_Reports_Each_Refusal_As_A_Pairing_Problem()
+- public void The_Room_Hands_The_Pairing_Problem_To_Its_Monitor()
+- public void The_Monitor_Sets_Its_Message_Before_Its_Status()
+- public void ZoomRoom_Exposes_Room_Hook(string name, string parameterTypes)
+- public void An_Attempt_That_Finds_The_Room_Connected_Ends_The_Loop()
+- public void Ending_The_Loop_Clears_Its_Timer_And_Starts_The_Count_Over()
+- public void Cancelling_The_Loop_Uses_The_Same_Ending()
+- public void A_Probe_That_Finds_The_Link_Alive_Stops_The_Loop_Like_A_Connected_Event()
+- public void RunHealthCheck(string reason)
+- public void Cpu_Use_Is_Kept_As_A_Percentage(int sdk, int expected)
+- public void Cpu_Use_Outside_0_To_100_Is_Unread(int sdk)
+- public void Memory_Use_Reads_As_A_Percentage(int usage, int size, int expected)
+- public void Memory_Use_That_Cannot_Be_A_Percentage_Is_Unread(int usage, int size)
+- public void Memory_Use_Of_0_Is_Unread()
+- public void Cpu_Use_Is_Read_With_The_Memory_In_The_Same_Message(int sdk, int? memory, int? expected)
+- public void A_Figure_That_Cannot_Be_Read_Keeps_The_One_Shown()
+- public void Every_Message_Is_Logged_At_Debug_Level()
+- public void Statistics_Are_Switched_On_From_A_Timer_After_Connect()
+- public void Going_Offline_Clears_The_Pc_Figures(string handler)
+- public void The_Statistics_Event_Is_Subscribed()
+- public void Statistics_And_The_Offline_Clear_Go_Through_The_Steady_Readings()
+- public void The_Zoom_Room_Is_A_Device_Info_Provider()
+- public void The_Controller_Reads_The_Paired_Room()
+- public void The_Name_And_Address_Are_Read_After_Connected_Off_The_Sdk_Thread()
+- public bool SetActiveSpeakerCamera(int tile)
+- public void UpdateDeviceInfo()
+- public void SpotlightParticipant(int userId)
+- public void UnspotlightParticipant(int userId)
+- public void ToggleParticipantSpotlight(int userId)
+- public void PositionHome()
+- public void PanLeft()
+- public void PanRight()
+- public void PanStop()
+- public void TiltDown()
+- public void TiltUp()
+- public void TiltStop()
+- public void ZoomIn()
+- public void ZoomOut()
+- public void ZoomStop()
+- public void LinkToApi(BasicTriList trilist, uint joinStart, string joinMapKey, EiscApiAdvanced bridge)
+- public void SetCameraTileNames(string[] names)
+- public bool SetCameraDisplayName(string deviceId, string displayName)
+- public int RenameCameraTile(int tile, string name)
+- public bool SetLayoutWhileSharing(string layout)
+- public void RefreshWebinar(bool requestAttendees)
+- public void RequestWebinarAttendees(string keywords)
+- public void SimulateWebinar(int attendeeCount)
+- public void AnswerPrompt(int id, bool accept)
+- public void DismissPrompt(int id)
+- public void SimulatePrompt(string kind, string text)
+- public bool SetCameraInputInMultiCamera(string inputPortKey, bool selected)
+- public void MuteAllParticipants()
+- public void AskAllToUnmute()
+- public void SetMuteOnEntry(bool enabled)
+- public void SetAllowAttendeesUnmute(bool allow)
+- public void SetAllowAttendeesStartVideo(bool allow)
+- public void ClaimHost(string hostKey)
+- public void SetParticipantAsCoHost(int userId, bool assign)
+- public void PromoteToPanelist(int userId)
+- public void DemoteToAttendee(int userId)
+- public void AllowAttendeeTalk(int userId, bool allow)
+- public void PauseRecording()
+- public void ResumeRecording()
+- public void GetBreakoutSnapshot(out List<BreakoutRoomState> rooms, out List<BreakoutParticipantState> unassigned)
+- public void RefreshBreakout()
+- public void CreateBreakoutRooms(int count, int assignType)
+- public void AddBreakoutRoom()
+- public void DeleteBreakoutRoom(string roomId)
+- public void RenameBreakoutRoom(string roomId, string name)
+- public void AssignToBreakoutRoom(IEnumerable<string> userGuids, string roomId)
+- public void InviteBackToMainSession(string userGuid)
+- public void JoinBreakoutRoomById(string roomId)
+- public void SetBreakoutOptions(BreakoutOptionsState o)
+- public void StartBreakoutRooms()
+- public void StopBreakoutRooms()
+- public void BroadcastToBreakoutRooms(string message)
+- public void JoinAssignedBreakoutRoom()
+- public void LeaveBreakoutRoom()
+- public void AskForHelpInBreakoutRoom()
+- public void SimulateBreakoutStatus(int status)
 - public void SelectCamera(string key)
 - public void GetSelfViewMode()
 - public void SelfViewModeOn()
@@ -186,6 +355,7 @@ See [docs/connection-watchdog-silent-disconnect.md](docs/connection-watchdog-sil
 - public void GetSchedule()
 - public void ExecuteSwitch(object inputSelector, object outputSelector, eRoutingSignalType signalType)
 - public void SetCurrentSource(eRoutingSignalType signalType, IRoutingSource sourceDevice)
+- public void SimulateRecordingRequest(string senderName, int recordingType)
 - public void VolumeSetToDefault()
 - public void LinkZoomRoomToApi(BasicTriList trilist, ZoomRoomJoinMap joinMap)
 - public void AcceptCall()
@@ -259,19 +429,10 @@ See [docs/connection-watchdog-silent-disconnect.md](docs/connection-watchdog-sil
 - public void StartRecording()
 - public void StopRecording()
 - public void ToggleRecording()
-- public void PositionHome()
-- public void PanLeft()
-- public void PanRight()
-- public void PanStop()
-- public void TiltDown()
-- public void TiltUp()
-- public void TiltStop()
-- public void ZoomIn()
-- public void ZoomOut()
-- public void ZoomStop()
-- public void LinkToApi(BasicTriList trilist, uint joinStart, string joinMapKey, EiscApiAdvanced bridge)
 - public bool Initialize(string configPath)
 - public int GetConnectionState()
+- public bool TryGetMeetingInfo(out CurrentMeetingInfo info)
+- public bool TryGetBreakoutEnabled(out bool enabled)
 - public bool PairWithActivationCode(string activationCode)
 - public bool CanRetryPair()
 - public bool RetryPair()
@@ -299,17 +460,66 @@ See [docs/connection-watchdog-silent-disconnect.md](docs/connection-watchdog-sil
 - public bool SetMuteOnEntry(bool mute)
 - public bool AnswerUnmuteRequest(bool accepted)
 - public bool AllowAttendeesUnmute(bool allow)
+- public bool AllowAttendeesStartVideo(bool allow)
+- public bool ConfirmMeetingReminder(bool agree, int reminderType)
+- public bool ConfirmCustomizedMeetingReminder(bool agree, int type)
+- public bool ConfirmConsent(bool agree, int consentType, string id)
+- public bool ConfirmCombinedConsent(bool agree, long consentType)
+- public bool HandlePrivacyAlert(int action, int type)
+- public bool ContinueMeetingOnInactivity()
+- public bool AnswerHostRequestUnmuteVideo(bool accepted)
+- public bool RespondRemoteCameraControl(int userId, bool accept)
+- public bool ResponseHostInviteToMainSession(bool accept)
+- public bool JoinBreakoutRoom()
+- public bool StartBreakoutRooms()
+- public bool StopBreakoutRooms()
+- public bool BroadcastMessageToBreakoutRooms(string message)
+- public bool LeaveBreakoutRoom()
+- public bool AskForHelpInBreakoutRoom()
+- public bool CreateBreakoutRooms(int count, int assignType)
+- public bool AddBreakoutRoom()
+- public bool DeleteBreakoutRoom(string sessionBID)
+- public bool RenameBreakoutRoom(string sessionBID, string newName)
+- public bool AssignUsersToBreakoutRoom(IEnumerable<string> g, string b)
+- public bool SetBOOptions(BOOptionsInfo options)
+- public bool RequestBOOptions()
+- public bool MoveUserToBreakoutRoom(string userGuid, string sessionBID)
+- public bool InviteBOUserReturnToMainSession(string userGuid)
+- public bool IgnoreBOHelpRequest(string userGuid)
+- public bool JoinBreakoutRoomForHelp(string g, string b, string n)
+- public bool JoinBreakoutRoomByBID(string sessionBID)
+- public bool RequestBreakoutRoomList()
+- public bool RequestBreakoutRoomUserList()
+- public bool ClaimHost(string hostKey)
+- public bool AssignCohost(int userId, bool assign)
+- public bool PromoteAttendeeToPanelist(int userId)
+- public bool DemotePanelistToAttendee(int userId)
+- public bool AllowWebinarAttendeeTalk(int userId, bool allow)
+- public bool ListWebinarAttendees(string keywords)
 - public bool SetSpeakerVolume(float volume)
 - public float GetSpeakerVolume()
+- public bool SetMicrophoneVolume(float volume)
+- public float GetMicrophoneVolume()
+- public bool EnableStatisticalInfo(bool enable)
+- public PairedRoomInfo GetLastZoomRoomInfo()
 - public bool SetVideoState(bool start)
 - public bool SetMyVideoHidden(bool hidden)
 - public bool MuteUserVideo(int userId, bool mute)
 - public bool PinUserOnScreen(int userId, int screenIndex = 0)
 - public bool UnpinUserFromScreen(int userId, int screenIndex = 0)
+- public bool SpotlightUser(int userId)
+- public bool CancelSpotlightUser(int userId)
 - public bool ControlUserCamera(int userId, int action, int type)
 - public bool ControlCamera(string deviceId, int action, int type)
 - public bool ChangeSmartCameraMode(int mask, string deviceId = "")
 - public CameraDevice GetCurrentCamera()
+- public int JoinIntegrationMeeting(string meetingId, string password, ThirdPartyMeetingProvider provider)
+- public int LeaveIntegrationMeeting()
+- public int MuteIntegrationAudio(bool mute)
+- public int StopIntegrationVideo(bool stop)
+- public InterOperabilityInfo GetInterOperabilityInfo(ThirdPartyMeetingProvider provider)
+- public int SetCameraDisplayName(string deviceId, string displayName)
+- public int SelectMultipleCamera(string deviceId, bool selected)
 - public bool SetCurrentCamera(string deviceId)
 - public bool SetCameraPreset(uint index, string deviceId)
 - public bool GoToCameraPreset(uint index, string deviceId)
@@ -330,6 +540,9 @@ See [docs/connection-watchdog-silent-disconnect.md](docs/connection-watchdog-sil
 - public int GetParticipantCount()
 - public bool ExpelUser(int userId)
 - public bool AssignHost(int userId)
+- public int SetMySelfAsActiveSpeaker()
+- public int SetMyChildAsActiveSpeaker(int userId)
+- public int RenameUser(int userId, string name)
 - public bool StopShare()
 - public bool LaunchSharingMeeting(bool isInLocalShare, int displayState)
 - public bool SwitchFromLocalPresentationToNormalMeeting()
@@ -350,50 +563,15 @@ See [docs/connection-watchdog-silent-disconnect.md](docs/connection-watchdog-sil
 - public void Dispose()
 - public void RunHealthCheck(string reason)
 - public void SetOnline(bool online)
-- public void Factory_Source_Sets_MinimumEssentialsFrameworkVersion_To_3(string factoryClassName)
-- public void Factory_Source_Assigns_TypeNames(string factoryClassName)
-- public void Factory_Source_Contains_TypeName(string factoryClassName, string typeName)
-- public void No_Duplicate_TypeNames_Across_Factories()
-- public void Assembly_Loads_Successfully()
-- public void Assembly_Name_Matches_Expected()
-- public void Factory_Count_Matches_Expected()
-- public void Factory_Exists_ByName(string factoryClassName)
-- public void All_Factories_Have_Parameterless_Constructor()
-- public void ZoomRoomPropertiesConfig_Exists_In_Assembly()
-- public void ZoomRoomPropertiesConfig_Has_Parameterless_Constructor()
-- public void ZoomRoomPropertiesConfig_Property_Has_JsonPropertyAttribute(string jsonName)
-- public void IZoomRoomController_Exists_In_Assembly()
-- public void IZoomRoomController_Is_Interface()
-- public void IZoomRoomController_Extends_IDisposable()
-- public void IZoomRoomController_Has_Lifecycle_Method(string methodName)
-- public void IZoomRoomController_Has_Meeting_Method(string methodName)
-- public void IZoomRoomController_Has_Audio_Method(string methodName)
-- public void IZoomRoomController_Has_Video_Method(string methodName)
-- public void IZoomRoomController_Has_Layout_Method(string methodName)
-- public void IZoomRoomController_Has_Share_Method(string methodName)
-- public void IZoomRoomController_Has_Recording_Method(string methodName)
-- public void IZoomRoomController_Has_Participant_Method(string methodName)
-- public void IZoomRoomController_Has_WaitingRoom_Method(string methodName)
-- public void IZoomRoomController_Has_Phone_Method(string methodName)
-- public void IZoomRoomController_Has_Contacts_Method(string methodName)
-- public void IZoomRoomController_Has_ListMeeting_Method()
-- public void IZoomRoomController_CommandMethod_Returns_Bool(string methodName)
-- public void IZoomRoomController_GetConnectionState_Returns_Int()
-- public void IZoomRoomController_Has_SdkEvent(string eventName)
-- public void IZoomRoomController_Has_ParticipantEvent(string eventName)
-- public void IZoomRoomController_Has_SharingStatusChanged_Event()
-- public void IZoomRoomController_Has_VideoPageStatusChanged_Event()
-- public void IZoomRoomController_Has_ContactListChanged_Event()
-- public void IZoomRoomController_Has_MeetingListChanged_Event()
-- public void IZoomRoomController_Has_MeetingRecordingInfoChanged_Event()
-- public void IZoomRoomController_Has_JoinMeeting_Overload_Without_Password()
-- public void IZoomRoomController_Has_JoinMeetingWithPassword_Overload()
-- public void IZoomRoomController_Has_SendMeetingPassword()
-- public void IZoomRoomController_Has_MeetingNeedsPassword_Event()
+- public void SetPairingProblem(string problem)
+- public int NextAfterFailure()
+- public int NextAfterRefusal()
+- public void Connected()
 <!-- END Public Methods -->
 <!-- START Bool Feedbacks -->
 ### Bool Feedbacks
 
+- InCallFeedback
 - ControllingFarEndCameraFeedback
 - SelfviewIsOnFeedback
 - CurrentDirectoryResultIsNotDirectoryRoot
@@ -413,6 +591,9 @@ See [docs/connection-watchdog-silent-disconnect.md](docs/connection-watchdog-sil
 <!-- START Int Feedbacks -->
 ### Int Feedbacks
 
+- CpuUsagePercentFeedback
+- MemoryUsagePercentFeedback
+- ParticipantCountFeedback
 - NumberOfScreensFeedback
 <!-- END Int Feedbacks -->
 <!-- START String Feedbacks -->
