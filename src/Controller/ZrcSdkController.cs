@@ -992,7 +992,15 @@ namespace PepperDash.Essentials.Plugins
                 int attempt;
                 lock (_reconnectLock)
                 {
-                    if (_disposed || _isConnected || _reconnectTimer == null) return;
+                    if (_disposed || _reconnectTimer == null) return;
+                    if (_isConnected)
+                    {
+                        // Back online without this loop (the health probe found the link alive). End the
+                        // loop: a timer left set would make every later ScheduleReconnect a no-op, so the
+                        // next real drop would start no reconnect at all.
+                        EndLoopLocked();
+                        return;
+                    }
                     attempt = _reconnectAttempt;
                     // The next step is set before asking, so a request that gets no answer still leads to
                     // another, and a refusal answer (which can only come after this) replaces it with the
@@ -1015,10 +1023,17 @@ namespace PepperDash.Essentials.Plugins
         {
             lock (_reconnectLock)
             {
-                _reconnectAttempt = 0;
-                _reconnectTimer?.Dispose();
-                _reconnectTimer = null;
+                EndLoopLocked();
             }
+        }
+
+        // Every way the loop stops goes through here, so its timer is always cleared and the next
+        // ScheduleReconnect starts a new loop. Call with _reconnectLock held.
+        private void EndLoopLocked()
+        {
+            _reconnectAttempt = 0;
+            _reconnectTimer?.Dispose();
+            _reconnectTimer = null;
         }
 
         // ── Health watchdog ─────────────────────────────────────────────────────
@@ -1071,10 +1086,14 @@ namespace PepperDash.Essentials.Plugins
                     _consecutiveCommandFailures = 0;
                     if (!_isConnected)
                     {
-                        // Link recovered without an SDK event — restore online and let the reconnect
-                        // loop's RetryToPairRoom fire a real Connected event for full re-seed.
+                        // Link recovered without an SDK event: restore online and stop the reconnect loop,
+                        // as a Connected event does, so the next real drop starts a fresh one at the
+                        // quick pace. (The loop never re-paired a room marked online here: its attempt
+                        // returned once it saw the room connected.)
                         this.LogInformation("Health probe succeeded while offline ({Reason}) — marking connected.", reason);
                         _isConnected = true;
+                        CancelReconnect();
+                        _policy.Connected();
                         SafeRaise(() => HealthStateChanged?.Invoke(this, true));
                     }
                     return;
